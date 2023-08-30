@@ -5,7 +5,7 @@
 
 ::============================================================================
 ::
-::   This script is a part of 'Microsoft Activation Scripts' (MAS) project.
+::   This script is a part of 'Microsoft_Activation_Scripts' (MAS) project.
 ::
 ::   Homepage: massgrave.dev
 ::      Email: windowsaddict@protonmail.com
@@ -53,10 +53,9 @@ pushd "%~dp0"
 >nul findstr /rxc:".*" "%~nx0"
 if not %errorlevel%==0 (
 echo:
-echo Error: This is not a correct file. It has LF line ending issue.
+echo Error: Script either has LF line ending issue, or it failed to read itself.
 echo:
-echo Press any key to exit...
-pause >nul
+ping 127.0.0.1 -n 6 > nul
 popd
 exit /b
 )
@@ -66,7 +65,7 @@ popd
 
 cls
 color 07
-title  Activation Troubleshoot
+title  Troubleshoot
 
 set _elev=
 if /i "%~1"=="-el" set _elev=1
@@ -86,6 +85,7 @@ set cbs_log=%SystemRoot%\logs\cbs\cbs.log
 set "nceline=echo: &echo ==== ERROR ==== &echo:"
 set "eline=echo: &call :_color %Red% "==== ERROR ====" &echo:"
 set "line=_________________________________________________________________________________________________"
+if %~z0 GEQ 200000 (set "_exitmsg=Go back") else (set "_exitmsg=Exit")
 
 ::========================================================================================================================================
 
@@ -135,10 +135,10 @@ goto at_done
 
 ::  Elevate script as admin and pass arguments and preventing loop
 
-%nul% reg query HKU\S-1-5-19 || (
+>nul fltmc || (
 if not defined _elev %nul% %psc% "start cmd.exe -arg '/c \"!_PSarg:'=''!\"' -verb runas" && exit /b
 %nceline%
-echo This script require administrator privileges.
+echo This script require admin privileges.
 echo To do so, right click on this script and select 'Run as administrator'.
 goto at_done
 )
@@ -167,7 +167,7 @@ setlocal EnableDelayedExpansion
 
 cls
 color 07
-title  Activation Troubleshoot
+title  Troubleshoot
 mode con cols=77 lines=30
 
 echo:
@@ -176,18 +176,18 @@ echo:
 echo:
 echo:       _______________________________________________________________
 echo:                                                   
-echo:             [1] ReadMe  
-echo:             ___________________________________________________      
+call :_color2 %_White% "             [1] " %_Green% "Help"
+echo:             ___________________________________________________
 echo:                                                                      
-echo:             [2] Dism RestoreHealth                                   
-echo:             [3] SFC Scannow                                          
-echo:                          
-echo:             [4] Rebuild Licensing Tokens
-echo:             [5] Clear Office vNext License
-echo:             ___________________________________________________      
+echo:             [2] Dism RestoreHealth
+echo:             [3] SFC Scannow
 echo:                                                                      
-echo:             [6] Solution: Office is not genuine banner
-echo:             [0] Exit                                                 
+echo:             [4] Fix WMI
+echo:             [5] Fix Licensing
+echo:             [6] Fix WPA Registry
+echo:             ___________________________________________________
+echo:
+echo:             [0] %_exitmsg%
 echo:       _______________________________________________________________
 echo:          
 call :_color2 %_White% "            " %_Green% "Enter a menu option in the Keyboard :"
@@ -195,9 +195,9 @@ choice /C:1234560 /N
 set _erl=%errorlevel%
 
 if %_erl%==7 exit /b
-if %_erl%==6 start https://massgrave.dev/office-license-is-not-genuine &goto at_menu
-if %_erl%==5 goto:clearvnext
-if %_erl%==4 goto:retokens
+if %_erl%==6 start https://massgrave.dev/fix-wpa-registry.html &goto at_menu
+if %_erl%==5 goto:retokens
+if %_erl%==4 goto:fixwmi
 if %_erl%==3 goto:sfcscan
 if %_erl%==2 goto:dism_rest
 if %_erl%==1 start https://massgrave.dev/troubleshoot.html &goto at_menu
@@ -209,7 +209,7 @@ goto :at_menu
 
 cls
 mode 98, 30
-title  Dism /Online /Cleanup-Image /RestoreHealth
+title  Dism /English /Online /Cleanup-Image /RestoreHealth
 
 if %winbuild% LSS 9200 (
 %eline%
@@ -219,8 +219,9 @@ goto :at_back
 )
 
 set _int=
-for %%a in (dns.msftncsi.com) do (
-if not defined _int (for /f "delims=[] tokens=2" %%# in ('ping -n 1 %%a') do if not [%%#]==[] set _int=1))
+for %%a in (l.root-servers.net resolver1.opendns.com download.windowsupdate.com google.com) do if not defined _int (
+for /f "delims=[] tokens=2" %%# in ('ping -n 1 %%a') do (if not [%%#]==[] set _int=1)
+)
 
 echo:
 if defined _int (
@@ -242,7 +243,7 @@ call :_color2 %_White% "     - " %Gray% "Make sure the Windows update is properl
 echo:
 echo %line%
 echo:
-choice /C:29 /N /M ">    [9] Continue [2] Go back : "
+choice /C:09 /N /M ">    [9] Continue [0] Go back : "
 if %errorlevel%==1 goto at_menu
 
 cls
@@ -256,15 +257,9 @@ set _time=
 for /f %%a in ('%psc% "Get-Date -format HH_mm_ss"') do set _time=%%a
 echo:
 echo Applying the command,
-echo dism /online /cleanup-image /restorehealth /Logpath:"%SystemRoot%\Temp\RHealth_DISM_%_time%.txt" /loglevel:4
+echo dism /english /online /cleanup-image /restorehealth
 echo:
-dism /online /cleanup-image /restorehealth /Logpath:"%SystemRoot%\Temp\RHealth_DISM_%_time%.txt" /loglevel:4
-
-if not exist "!desktop!\" (
-echo:
-call :_color %Red% "Desktop location is not detected. Failed to copy logs on the dekstop."
-goto :at_back
-)
+dism /english /online /cleanup-image /restorehealth /Logpath:"%SystemRoot%\Temp\RHealth_DISM_%_time%.txt" /loglevel:4
 
 if not exist "!desktop!\AT_Logs\" md "!desktop!\AT_Logs\" %nul%
 copy /y /b "%SystemRoot%\Temp\RHealth_DISM_%_time%.txt" "!desktop!\AT_Logs\RHealth_DISM_%_time%.txt" %nul%
@@ -295,7 +290,7 @@ echo      restarting the PC after each time to completely fix everything that it
 echo:   
 echo %line%
 echo:
-choice /C:29 /N /M ">    [9] Continue [2] Go back : "
+choice /C:09 /N /M ">    [9] Continue [0] Go back : "
 if %errorlevel%==1 goto at_menu
 
 cls
@@ -312,99 +307,13 @@ echo sfc /scannow
 echo:
 sfc /scannow
 
-if not exist "!desktop!\" (
-echo:
-call :_color %Red% "Desktop location is not detected. Failed to copy logs on the dekstop."
-goto :at_back
-)
-
 if not exist "!desktop!\AT_Logs\" md "!desktop!\AT_Logs\" %nul%
 
 copy /y /b "%cbs_log%" "!desktop!\AT_Logs\SFC_CBS_%_time%.txt" %nul%
-findstr /i /c:"[SR]" %cbs_log% | findstr /i /v /c:verify >"!desktop!\AT_Logs\SFC_Main_%_time%.txt"
 
 echo:
-call :_color %Gray% "CBS and main extracted logs are copied to the AT_Logs folder on the dekstop."
+call :_color %Gray% "CBS log is copied to the AT_Logs folder on the dekstop."
 goto :at_back
-
-::========================================================================================================================================
-
-:clearvnext
-
-cls
-mode 98, 30
-title  Clear Office vNext License
-
-echo:
-echo %line%
-echo:    
-echo      This options will clear Office vNext ^(subscription^) license
-echo:
-echo      You need to use this option when,
-echo          - KMS option is not activating office due to existing subscription license
-echo          - KMS option activated Office but Office activation page is not showing activated
-echo:   
-echo %line%
-echo:
-choice /C:29 /N /M ">    [9] Continue [2] Go back : "
-if %errorlevel%==1 goto at_menu
-
-cls
-mode con cols=115 lines=32
-%nul% %psc% "&{$W=$Host.UI.RawUI.WindowSize;$B=$Host.UI.RawUI.BufferSize;$W.Height=31;$B.Height=200;$Host.UI.RawUI.WindowSize=$W;$Host.UI.RawUI.BufferSize=$B;}"
-
-
-
-echo:
-echo %line%
-echo:
-call :_color %Magenta% "Clearing Office vNext License"
-echo:
-
-setlocal DisableDelayedExpansion
-set "_locl=%LocalAppData%\Microsoft\Office\Licenses"
-setlocal EnableDelayedExpansion
-call :cleanfolder
-set "_locl=%ProgramData%\Microsoft\Office\Licenses"
-call :cleanfolder
-
-echo:
-for %%# in (
-HKCU\Software\Microsoft\Office\16.0\Common\Licensing
-HKCU\Software\Microsoft\Office\16.0\Common\Identity
-) do (
-reg query %%# %nul% && (
-reg delete %%# /f %nul% && (
-echo Deleted Registry - %%#
-) || (
-echo Failed to Delete - %%#
-)
-) || (
-echo Already Clean - %%#
-)
-)
-
-goto :at_back
-
-:cleanfolder
-
-2>nul dir /b /a "!_locl!\*" | %nul% findstr "^" && (
-pushd "!_locl!\" && (
-del /S /F /Q "!_locl!\*"
-for /F "delims=" %%i in ('dir /b') do (
-RD /S /Q "%%i" %nul%
-if not exist "!_locl!\%%i\" (
-echo Deleted Folder - !_locl!\%%i
-) else (
-echo Failed To Delete - !_locl!\%%i
-)
-)
-popd
-)
-) || (
-echo Already Clean - !_locl!\
-)
-exit /b
 
 ::========================================================================================================================================
 
@@ -413,7 +322,7 @@ exit /b
 cls
 mode con cols=115 lines=32
 %nul% %psc% "&{$W=$Host.UI.RawUI.WindowSize;$B=$Host.UI.RawUI.BufferSize;$W.Height=31;$B.Height=200;$Host.UI.RawUI.WindowSize=$W;$Host.UI.RawUI.BufferSize=$B;}"
-title  Rebuild Licensing Tokens ^(SPP ^+ OSPP)
+title  Fix Licensing ^(ClipSVC ^+ Office vNext ^+ SPP ^+ OSPP^)
 
 echo:
 echo %line%
@@ -422,21 +331,187 @@ echo      Notes:
 echo:
 echo       - It helps in troubleshooting activation issues.
 echo:
-call :_color2 %_White% "      - " %Magenta% "This option will,"
-call :_color2 %_White% "        " %Magenta% "- Deactivate Windows and Office, you will need to reactivate"
-call :_color2 %_White% "        " %Magenta% "- Uninstall Office licenses and keys"
-call :_color2 %_White% "        " %Magenta% "- Clear SPP-OSPP data.dat, tokens.dat, cache.dat"
-call :_color2 %_White% "        " %Magenta% "- Trigger the repair option for Office"
+echo       - This option will,
+echo            - Deactivate Windows and Office, you may need to reactivate
+echo            - Clear ClipSVC, Office vNext, SPP and OSPP licenses
+echo            - Fix SPP permissions of tokens folder and registries
+echo            - Trigger the repair option for Office.
 echo:
 call :_color2 %_White% "      - " %Red% "Apply it only when it is necessary."
 echo:
 echo %line%
 echo:
-choice /C:29 /N /M ">    [9] Continue [2] Go back : "
+choice /C:09 /N /M ">    [9] Continue [0] Go back : "
 if %errorlevel%==1 goto at_menu
 
+::========================================================================================================================================
+
+::  Rebuild ClipSVC Licences
 
 cls
+:cleanlicensing
+
+echo:
+echo %line%
+echo:
+call :_color %Magenta% "Rebuilding ClipSVC Licences"
+echo:
+
+if %winbuild% LSS 10240 (
+echo ClipSVC Licence rebuilding is supported only on Win 10/11 and Server equivalent.
+echo Skipping...
+goto :cleanvnext
+)
+
+%psc% "(([WMISEARCHER]'SELECT Name FROM SoftwareLicensingProduct WHERE LicenseStatus=1 AND GracePeriodRemaining=0 AND PartialProductKey IS NOT NULL').Get()).Name" 2>nul | findstr /i "Windows" 1>nul && (
+echo Windows is permanently activated.
+echo Skipping rebuilding ClipSVC licences...
+goto :cleanvnext
+)
+
+echo Stopping ClipSVC service...
+call :_stopservice ClipSVC
+timeout /t 2 %nul%
+
+echo:
+echo Applying the command to Clean ClipSVC Licences...
+echo rundll32 clipc.dll,ClipCleanUpState
+
+rundll32 clipc.dll,ClipCleanUpState
+
+if %winbuild% LEQ 10240 (
+echo [Successful]
+) else (
+if exist "%ProgramData%\Microsoft\Windows\ClipSVC\tokens.dat" (
+call :_color %Red% "[Failed]"
+) else (
+echo [Successful]
+)
+)
+
+::  Below registry key (Volatile & Protected) gets created after the ClipSVC License cleanup command, and gets automatically deleted after 
+::  system restart. It needs to be deleted to activate the system without restart.
+
+set "RegKey=HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ClipSVC\Volatile\PersistedSystemState"
+set "_ident=HKU\S-1-5-19\SOFTWARE\Microsoft\IdentityCRL"
+
+reg query "%RegKey%" %nul% && %nul% call :regownstart
+reg delete "%RegKey%" /f %nul% 
+
+echo:
+echo Deleting a Volatile ^& Protected Registry Key...
+echo [%RegKey%]
+reg query "%RegKey%" %nul% && (
+call :_color %Red% "[Failed]"
+echo Restart the system, that will delete this registry key automatically.
+) || (
+echo [Successful]
+)
+
+::   Clear HWID token related registry to fix activation incase if there is any corruption
+
+echo:
+echo Deleting a IdentityCRL Registry Key...
+echo [%_ident%]
+reg delete "%_ident%" /f %nul%
+reg query "%_ident%" %nul% && (
+call :_color %Red% "[Failed]"
+) || (
+echo [Successful]
+)
+
+call :_stopservice ClipSVC
+
+::  Rebuild ClipSVC folder to fix permission issues
+
+echo:
+if %winbuild% GTR 10240 (
+echo Deleting Folder %ProgramData%\Microsoft\Windows\ClipSVC\
+rmdir /s /q "C:\ProgramData\Microsoft\Windows\ClipSvc" %nul%
+
+if exist "%ProgramData%\Microsoft\Windows\ClipSVC\" (
+call :_color %Red% "[Failed]"
+) else (
+echo [Successful]
+)
+
+echo:
+echo Rebuilding Folder %ProgramData%\Microsoft\Windows\ClipSVC\
+net start ClipSVC /y %nul%
+timeout /t 3 %nul%
+if not exist "%ProgramData%\Microsoft\Windows\ClipSVC\" timeout /t 5 %nul%
+if not exist "%ProgramData%\Microsoft\Windows\ClipSVC\" (
+call :_color %Red% "[Failed]"
+) else (
+echo [Successful]
+)
+)
+
+echo:
+echo Restarting [wlidsvc LicenseManager] services...
+for %%# in (wlidsvc LicenseManager) do (net stop %%# /y %nul% & net start %%# /y %nul%)
+
+::========================================================================================================================================
+
+::  Clear Office vNext License
+
+:cleanvnext
+
+echo:
+echo %line%
+echo:
+call :_color %Magenta% "Clearing Office vNext License"
+echo:
+
+setlocal DisableDelayedExpansion
+set "_Local=%LocalAppData%"
+setlocal EnableDelayedExpansion
+
+attrib -R "!ProgramData!\Microsoft\Office\Licenses" %nul%
+attrib -R "!_Local!\Microsoft\Office\Licenses" %nul%
+
+if exist "!ProgramData!\Microsoft\Office\Licenses\" (
+rd /s /q "!ProgramData!\Microsoft\Office\Licenses\" %nul%
+if exist "!ProgramData!\Microsoft\Office\Licenses\" (
+echo Failed To Delete - !ProgramData!\Microsoft\Office\Licenses\
+) else (
+echo Deleted Folder - !ProgramData!\Microsoft\Office\Licenses\
+)
+) else (
+echo Not Found - !ProgramData!\Microsoft\Office\Licenses\
+)
+
+if exist "!_Local!\Microsoft\Office\Licenses\" (
+rd /s /q "!_Local!\Microsoft\Office\Licenses\" %nul%
+if exist "!_Local!\Microsoft\Office\Licenses\" (
+echo Failed To Delete - !_Local!\Microsoft\Office\Licenses\
+) else (
+echo Deleted Folder - !_Local!\Microsoft\Office\Licenses\
+)
+) else (
+echo Not Found - !_Local!\Microsoft\Office\Licenses\
+)
+
+echo:
+for %%# in (
+HKCU\Software\Microsoft\Office\16.0\Common\Licensing
+HKCU\Software\Microsoft\Office\16.0\Registration
+) do (
+reg query %%# %nul% && (
+reg delete %%# /f %nul% && (
+echo Deleted Registry - %%#
+) || (
+echo Failed to Delete - %%#
+)
+) || (
+echo Not Found Registry - %%#
+)
+)
+
+::========================================================================================================================================
+
+::  Rebuild SPP Tokens
+
 echo:
 echo %line%
 echo:
@@ -449,6 +524,64 @@ if not defined token (
 call :_color %Red% "tokens.dat file not found."
 ) else (
 echo tokens.dat file: [%token%]
+)
+
+if %winbuild% GEQ 14393 (
+set wpaerror=
+set /a count=0
+for /f %%a in ('reg query "HKLM\SYSTEM\WPA" 2^>nul') do set /a count+=1
+for /L %%# in (1,1,!count!) do (
+reg query "HKLM\SYSTEM\WPA\8DEC0AF1-0341-4b93-85CD-72606C2DF94C-7P-%%#" /ve /t REG_BINARY %nul% || set wpaerror=1
+)
+
+if defined wpaerror (
+echo:
+echo Checking WPA Registry Keys...
+call :_color %Red% "[Error Found] [Registry Count - !count!]"
+)
+)
+
+set tokenstore=
+for /f "skip=2 tokens=2*" %%a in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform" /v TokenStore 2^>nul') do call set "tokenstore=%%b"
+
+::  Check sppsvc permissions and apply fixes
+
+if %winbuild% GEQ 10240 (
+
+echo:
+echo Checking SPP permission related issues...
+call :checkperms
+
+if defined permerror (
+
+mkdir "%tokenstore%" %nul%
+set "d=$sddl = 'O:BAG:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GR;;;BU)(A;;FR;;;BU)(A;OICI;FA;;;S-1-5-80-123231216-2592883651-3715271367-3753151631-4175906628)';"
+set "d=!d! $AclObject = New-Object System.Security.AccessControl.DirectorySecurity;"
+set "d=!d! $AclObject.SetSecurityDescriptorSddlForm($sddl);"
+set "d=!d! Set-Acl -Path %tokenstore% -AclObject $AclObject;"
+%psc% "!d!" %nul%
+
+for %%# in (
+"HKLM:\SYSTEM\WPA_QueryValues, EnumerateSubKeys, WriteKey"
+"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform_SetValue"
+) do for /f "tokens=1,2 delims=_" %%A in (%%#) do (
+set "d=$acl = Get-Acl '%%A';"
+set "d=!d! $rule = New-Object System.Security.AccessControl.RegistryAccessRule ('NT Service\sppsvc', '%%B', 'ContainerInherit, ObjectInherit','None','Allow');"
+set "d=!d! $acl.ResetAccessRule($rule);"
+set "d=!d! $acl.SetAccessRule($rule);"
+set "d=!d! Set-Acl -Path '%%A' -AclObject $acl"
+%psc% "!d!" %nul%
+)
+
+call :checkperms
+if defined permerror (
+call :_color %Red% "[Failed To Fix]"
+) else (
+echo [Successfully Fixed]
+)
+) else (
+echo [Error Not Found]
+)
 )
 
 echo:
@@ -481,7 +614,7 @@ echo:
 if not defined token (
 call :_color %Red% "Failed to rebuilt tokens.dat file."
 ) else (
-call :_color %Green% "tokens.dat file was rebuilt successfully."
+echo tokens.dat file was rebuilt successfully.
 )
 
 ::========================================================================================================================================
@@ -491,16 +624,14 @@ call :_color %Green% "tokens.dat file was rebuilt successfully."
 echo:
 echo %line%
 echo:
-
-sc qc osppsvc %nul% || (
-echo:
-call :_color %Magenta% "OSPP based Office is not installed"
-call :_color %Magenta% "Skipping rebuilding OSPP tokens"
-goto :cleanclipsvc
-)
-
 call :_color %Magenta% "Rebuilding OSPP Licensing Tokens"
 echo:
+
+sc qc osppsvc %nul% || (
+echo OSPP based Office is not installed
+echo Skipping rebuilding OSPP tokens...
+goto :repairoffice
+)
 
 call :scandatospp check
 
@@ -540,14 +671,8 @@ echo:
 if not defined token (
 call :_color %Red% "Failed to rebuilt tokens.dat file."
 ) else (
-call :_color %Green% "tokens.dat file was rebuilt successfully."
+echo tokens.dat file was rebuilt successfully.
 )
-
-::========================================================================================================================================
-
-:cleanclipsvc
-
-:: This section is removed
 
 ::========================================================================================================================================
 
@@ -597,10 +722,11 @@ set _86=HKLM\SOFTWARE\Wow6432Node\Microsoft\Office
 %nul% reg query %_86%\ClickToRun /v InstallPath        && (set "c2r16_86=Office 16.0 C2R x86"      & set "c2r16repair86=%systemdrive%\Program Files\Microsoft Office 15\Client%arch%\OfficeClickToRun.exe")
 
 set uwp16=
-if %winbuild% GEQ 10240 reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msoxmled.exe" %nul% && (
+if %winbuild% GEQ 10240 (
 dir /b "%ProgramFiles%\WindowsApps\Microsoft.Office.Desktop*" %nul% && set uwp16=Office 16.0 UWP
 dir /b "%ProgramW6432%\WindowsApps\Microsoft.Office.Desktop*" %nul% && set uwp16=Office 16.0 UWP
 dir /b "%ProgramFiles(x86)%\WindowsApps\Microsoft.Office.Desktop*" %nul% && set uwp16=Office 16.0 UWP
+%psc% "Get-AppxPackage -name "Microsoft.Office.Desktop"" | find /i "Office" 1>nul && set uwp16=Office 16.0 UWP
 )
 
 set /a counter=0
@@ -645,7 +771,7 @@ goto :repairend
 echo:
 ) else (
 echo:
-call :_color %_Yellow% "A Window will popup, in that Window you need to select Repair Option..."
+call :_color %_Yellow% "A Window will popup, in that Window you need to select [Quick] Repair Option..."
 call :_color %_Yellow% "Press any key to continue..."
 echo:
 pause >nul
@@ -691,6 +817,147 @@ echo %line%
 echo:
 echo:
 call :_color %Green% "Finished"
+goto :at_back
+
+::========================================================================================================================================
+
+:fixwmi
+
+cls
+mode 98, 34
+title  Fix WMI
+
+::  https://techcommunity.microsoft.com/t5/ask-the-performance-team/wmi-repository-corruption-or-not/ba-p/375484
+
+if exist "%SystemRoot%\Servicing\Packages\Microsoft-Windows-Server*Edition~*.mum" (
+%eline%
+echo WMI rebuild is not recommended on Windows Server. Aborting...
+goto :at_back
+)
+
+for %%# in (wmic.exe) do @if "%%~$PATH:#"=="" (
+%eline%
+echo wmic.exe file is not found in the system. Aborting...
+goto :at_back
+)
+
+echo:
+echo Checking WMI
+
+set error=
+wmic path Win32_ComputerSystem get CreationClassName /value 2>nul | find /i "computersystem" 1>nul
+if %errorlevel% NEQ 0 set error=1
+winmgmt /verifyrepository %nul%
+if %errorlevel% NEQ 0 set error=1
+
+if not defined error (
+echo [Working]
+echo No need to apply this option. Aborting...
+goto :at_back
+)
+
+call :_color %Red% "[Not Responding]"
+
+echo:
+sc query Winmgmt %nul% || (
+%eline%
+echo Winmgmt service is not installed. Aborting...
+goto :at_back
+)
+
+echo Disabling Winmgmt service
+sc config Winmgmt start= disabled %nul%
+if %errorlevel% EQU 0 (
+echo [Successful]
+) else (
+call :_color %Red% "[Failed] Aborting..."
+sc config Winmgmt start= auto %nul%
+goto :at_back
+)
+
+echo:
+echo Stopping Winmgmt service
+call :_stopservice Winmgmt
+call :_stopservice Winmgmt
+call :_stopservice Winmgmt
+sc query Winmgmt | find /i "1  STOPPED" %nul% && (
+echo [Successful]
+) || (
+call :_color %Red% "[Failed]"
+echo:
+call :_color %Magenta% "Its recommended to select [Restart] option and then apply Fix WMI option again."
+echo %line%
+echo:
+choice /C:21 /N /M "> [1] Restart  [2] Revert Back Changes :"
+if !errorlevel!==1 (sc config Winmgmt start= auto %nul%&goto :at_back)
+echo:
+echo Restarting...
+shutdown -t 5 -r
+exit
+)
+
+echo:
+echo Deleting WMI repository
+rmdir /s /q "%windir%\System32\wbem\repository\" %nul%
+if exist "%windir%\System32\wbem\repository\" (
+call :_color %Red% "[Failed]"
+) else (
+echo [Successful]
+)
+
+echo:
+echo Enabling Winmgmt service
+sc config Winmgmt start= auto %nul%
+if %errorlevel% EQU 0 (
+echo [Successful]
+) else (
+call :_color %Red% "[Failed]"
+)
+
+wmic path Win32_ComputerSystem get CreationClassName /value 2>nul | find /i "computersystem" 1>nul
+if %errorlevel% EQU 0 (
+echo:
+echo Checking WMI
+call :_color %Green% "[Working]"
+goto :at_back
+)
+
+echo:
+echo Registering .dll's and Compiling .mof's, .mfl's
+call :registerobj %nul%
+
+echo:
+echo Checking WMI
+wmic path Win32_ComputerSystem get CreationClassName /value 2>nul | find /i "computersystem" 1>nul
+if %errorlevel% NEQ 0 (
+call :_color %Red% "[Not Responding]"
+echo:
+echo Run [Dism RestoreHealth] and [SFC Scannow] options and make sure there are no errors.
+) else (
+call :_color %Green% "[Working]"
+)
+
+goto :at_back
+
+:registerobj
+
+::  https://eskonr.com/2012/01/how-to-fix-wmi-issues-automatically/
+
+call :_stopservice Winmgmt
+cd /d %systemroot%\system32\wbem\
+regsvr32 /s %systemroot%\system32\scecli.dll
+regsvr32 /s %systemroot%\system32\userenv.dll
+mofcomp cimwin32.mof
+mofcomp cimwin32.mfl
+mofcomp rsop.mof
+mofcomp rsop.mfl
+for /f %%s in ('dir /b /s *.dll') do regsvr32 /s %%s
+for /f %%s in ('dir /b *.mof') do mofcomp %%s
+for /f %%s in ('dir /b *.mfl') do mofcomp %%s
+
+winmgmt /salvagerepository
+winmgmt /resetrepository
+exit /b
 
 ::========================================================================================================================================
 
@@ -708,7 +975,7 @@ goto :at_menu
 :at_done
 
 echo:
-echo Press any key to exit...
+echo Press any key to %_exitmsg%...
 pause >nul
 exit /b
 
@@ -727,6 +994,23 @@ exit /b
 for %%# in (%1) do (
 sc query %%# | find /i "RUNNING" %nul% || net start %%# /y %nul%
 sc query %%# | find /i "RUNNING" %nul% || sc start %%# %nul%
+)
+exit /b
+
+::========================================================================================================================================
+
+:checkperms
+
+set permerror=
+if not exist "%tokenstore%\" set permerror=1
+
+for %%# in (
+"%tokenstore%"
+"HKLM:\SYSTEM\WPA"
+"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform"
+) do if not defined permerror (
+%psc% "$acl = Get-Acl '%%#'; if ($acl.Access.Where{ $_.IdentityReference -eq 'NT SERVICE\sppsvc' -and $_.AccessControlType -eq 'Deny' -or $acl.Access.IdentityReference -notcontains 'NT SERVICE\sppsvc'}) {Exit 2}" %nul%
+if !errorlevel!==2 set permerror=1
 )
 exit /b
 
@@ -779,7 +1063,41 @@ del /S /F /Q "%%#*.dat"
 )
 exit /b
 
-::========================================================================================================================================\
+::========================================================================================================================================
+
+:regownstart
+
+%psc% "$f=[io.file]::ReadAllText('!_batp!') -split ':regown\:.*';iex ($f[1]);"
+exit /b
+
+::  Below code takes ownership of a volatile registry key and deletes it
+::  HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ClipSVC\Volatile\PersistedSystemState
+
+:regown:
+$AssemblyBuilder = [AppDomain]::CurrentDomain.DefineDynamicAssembly(4, 1)
+$ModuleBuilder = $AssemblyBuilder.DefineDynamicModule(2, $False)
+$TypeBuilder = $ModuleBuilder.DefineType(0)
+
+$TypeBuilder.DefinePInvokeMethod('RtlAdjustPrivilege', 'ntdll.dll', 'Public, Static', 1, [int], @([int], [bool], [bool], [bool].MakeByRefType()), 1, 3) | Out-Null
+$TypeBuilder.CreateType()::RtlAdjustPrivilege(9, $true, $false, [ref]$false) | Out-Null
+
+$SID = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+$IDN = ($SID.Translate([System.Security.Principal.NTAccount])).Value
+$Admin = New-Object System.Security.Principal.NTAccount($IDN)
+
+$path = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\ClipSVC\Volatile\PersistedSystemState'
+$key = [Microsoft.Win32.RegistryKey]::OpenBaseKey('LocalMachine', 'Registry64').OpenSubKey($path, 'ReadWriteSubTree', 'takeownership')
+
+$acl = $key.GetAccessControl()
+$acl.SetOwner($Admin)
+$key.SetAccessControl($acl)
+
+$rule = New-Object System.Security.AccessControl.RegistryAccessRule($Admin,"FullControl","Allow")
+$acl.SetAccessRule($rule)
+$key.SetAccessControl($acl)
+:regown:
+
+::========================================================================================================================================
 
 :_color
 

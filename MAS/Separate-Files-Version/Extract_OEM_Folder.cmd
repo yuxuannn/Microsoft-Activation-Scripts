@@ -5,9 +5,9 @@
 
 ::============================================================================
 ::
-::   This script is a part of 'Microsoft Activation Scripts' (MAS) project.
+::   This script is a part of 'Microsoft_Activation_Scripts' (MAS) project.
 ::
-::   Homepage: massgrave.dev
+::   Homepage: mass grave.dev
 ::      Email: windowsaddict@protonmail.com
 ::
 ::============================================================================
@@ -53,10 +53,9 @@ pushd "%~dp0"
 >nul findstr /rxc:".*" "%~nx0"
 if not %errorlevel%==0 (
 echo:
-echo Error: This is not a correct file. It has LF line ending issue.
+echo Error: Script either has LF line ending issue, or it failed to read itself.
 echo:
-echo Press any key to exit...
-pause >nul
+ping 127.0.0.1 -n 6 > nul
 popd
 exit /b
 )
@@ -114,21 +113,11 @@ goto done2
 
 ::========================================================================================================================================
 
-::  Check desktop location
+::  Fix for the special characters limitation in path name
 
 set desktop=
 for /f "skip=2 tokens=2*" %%a in ('reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" /v Desktop') do call set "desktop=%%b"
 if not defined desktop for /f "delims=" %%a in ('%psc% "& {write-host $([Environment]::GetFolderPath('Desktop'))}"') do call set "desktop=%%a"
-
-if not defined desktop (
-%eline%
-echo Desktop location was not detected, aborting...
-goto done2
-)
-
-::========================================================================================================================================
-
-::  Fix for the special characters limitation in path name
 
 set "_work=%~dp0"
 if "%_work:~-1%"=="\" set "_work=%_work:~0,-1%"
@@ -137,19 +126,12 @@ set "_batf=%~f0"
 set "_batp=%_batf:'=''%"
 set "_pdesk=%desktop:'=''%"
 
+set _PSarg="""%~f0""" -el %_args%
 set "_ttemp=%temp%"
 
 set "_dir=%desktop%\$OEM$\$$\Setup\Scripts"
 
 setlocal EnableDelayedExpansion
-
-::========================================================================================================================================
-
-if not exist "!desktop!\" (
-%eline%
-echo Desktop location was not detected, aborting...
-goto done2
-)
 
 ::========================================================================================================================================
 
@@ -166,7 +148,27 @@ goto done2
 
 ::========================================================================================================================================
 
-mode 66, 26
+::  Elevate script as admin and pass arguments and preventing loop
+
+>nul fltmc || (
+if not defined _elev %nul% %psc% "start cmd.exe -arg '/c \"!_PSarg:'=''!\"' -verb runas" && exit /b
+%eline%
+echo This script require admin privileges.
+echo To do so, right click on this script and select 'Run as administrator'.
+goto done2
+)
+
+::========================================================================================================================================
+
+if not exist "!desktop!\" (
+%eline%
+echo Desktop location was not detected, aborting...
+goto done2
+)
+
+::========================================================================================================================================
+
+mode con cols=78 lines=30
 
 if exist "!desktop!\$OEM$\" (
 echo _____________________________________________________
@@ -176,14 +178,9 @@ echo _____________________________________________________
 goto done2
 )
 
-set HWID_Activation.cmd=HWID-KMS38_Activation\HWID_Activation.cmd
-set KMS38_Activation.cmd=HWID-KMS38_Activation\KMS38_Activation.cmd
-set ClipUp.exe=HWID-KMS38_Activation\BIN\ClipUp.exe
-set gatherosstate.exe=HWID-KMS38_Activation\BIN\gatherosstate.exe
-
-set Activate.cmd=Online_KMS_Activation\Activate.cmd
-set cleanosppx64.exe=Online_KMS_Activation\BIN\cleanosppx64.exe
-set cleanosppx86.exe=Online_KMS_Activation\BIN\cleanosppx86.exe
+set HWID_Activation.cmd=Activators\HWID_Activation.cmd
+set KMS38_Activation.cmd=Activators\KMS38_Activation.cmd
+set Online_KMS_Activation.cmd=Activators\Online_KMS_Activation.cmd
 
 pushd "!_work!"
 
@@ -191,11 +188,7 @@ set _nofile=
 for %%# in (
 %HWID_Activation.cmd%
 %KMS38_Activation.cmd%
-%ClipUp.exe%
-%gatherosstate.exe%
-%Activate.cmd%
-%cleanosppx64.exe%
-%cleanosppx86.exe%
+%Online_KMS_Activation.cmd%
 ) do (
 if not exist "%%#" set _nofile=1
 )
@@ -215,25 +208,27 @@ goto done2
 :Menu
 
 cls
+mode con cols=78 lines=30
 echo:
 echo:
 echo:
 echo:
-echo:               Extract $OEM$ folder on the desktop           
-echo:     ________________________________________________________
-echo:                                                            
-echo:        [1] HWID
-echo:        [2] KMS38
-echo:        [3] Online KMS
-echo:    
-echo:        [4] HWID  ^(Windows^) ^+ Online KMS ^(Office^)
-echo:        [5] KMS38 ^(Windows^) ^+ Online KMS ^(Office^)
 echo:
-echo:        [6] Exit                                            
-echo:     ________________________________________________________
+echo:                     Extract $OEM$ folder on the desktop           
+echo:           ________________________________________________________
+echo:                                                                  
+echo:              [1] HWID
+echo:              [2] KMS38
+echo:              [3] Online KMS
+echo:          
+echo:              [4] HWID  ^(Windows^) ^+ Online KMS ^(Office^)
+echo:              [5] KMS38 ^(Windows^) ^+ Online KMS ^(Office^)
+echo:          
+echo:              [0] Exit                                            
+echo:           ________________________________________________________
 echo:  
-call :ex_color2 %_White% "      " %_Green% "Enter a menu option in the Keyboard [1,2,3,4,5,6]"
-choice /C:123456 /N
+call :ex_color2 %_White% "             " %_Green% "Enter a menu option in the Keyboard [1,2,3,4,5,0]"
+choice /C:123450 /N
 set _erl=%errorlevel%
 
 if %_erl%==6 exit /b
@@ -249,14 +244,18 @@ goto :Menu
 :hwid
 
 cls
-call :prep
-call :hwidprep
-call :pop_d
+md "!desktop!\$OEM$\$$\Setup\Scripts"
+pushd "!_work!"
+copy /y /b "%HWID_Activation.cmd%" "!_dir!\HWID_Activation.cmd" %nul%
+popd
 call :export hwid_setup
-call :hwidprep2
 
+set _error=
+if not exist "!_dir!\HWID_Activation.cmd" set _error=1
+if not exist "!_dir!\SetupComplete.cmd" set _error=1
 if defined _error goto errorfound
-set "_oem=HWID"
+
+set oem=HWID
 goto done
 
 :hwid_setup:
@@ -264,7 +263,7 @@ goto done
 
 fltmc >nul || exit /b
 
-start /b /wait cmd /c "%~dp0HWID_Activation.cmd" /a
+start /b /wait cmd /c "%~dp0HWID_Activation.cmd" /HWID
 
 cd \
 (goto) 2>nul & (if "%~dp0"=="%SystemRoot%\Setup\Scripts\" rd /s /q "%~dp0")
@@ -275,14 +274,18 @@ cd \
 :kms38
 
 cls
-call :prep
-call :kms38prep
-call :pop_d
+md "!desktop!\$OEM$\$$\Setup\Scripts"
+pushd "!_work!"
+copy /y /b "%KMS38_Activation.cmd%" "!_dir!\KMS38_Activation.cmd" %nul%
+popd
 call :export kms38_setup
-call :kms38prep2
 
+set _error=
+if not exist "!_dir!\KMS38_Activation.cmd" set _error=1
+if not exist "!_dir!\SetupComplete.cmd" set _error=1
 if defined _error goto errorfound
-set "_oem=KMS38"
+
+set oem=KMS38
 goto done
 
 :kms38_setup:
@@ -290,7 +293,7 @@ goto done
 
 fltmc >nul || exit /b
 
-start /b /wait cmd /c "%~dp0KMS38_Activation.cmd" /a
+start /b /wait cmd /c "%~dp0KMS38_Activation.cmd" /KMS38
 
 cd \
 (goto) 2>nul & (if "%~dp0"=="%SystemRoot%\Setup\Scripts\" rd /s /q "%~dp0")
@@ -301,14 +304,18 @@ cd \
 :kms
 
 cls
-call :prep
-call :kmsprep
-call :pop_d
+md "!desktop!\$OEM$\$$\Setup\Scripts"
+pushd "!_work!"
+copy /y /b "%Online_KMS_Activation.cmd%" "!_dir!\Online_KMS_Activation.cmd" %nul%
+popd
 call :export kms_setup
-call :kmsprep2
 
-if defined _kerror goto errorfound
-set "_oem=Online KMS"
+set _error=
+if not exist "!_dir!\Online_KMS_Activation.cmd" set _error=1
+if not exist "!_dir!\SetupComplete.cmd" set _error=1
+if defined _error goto errorfound
+
+set oem=Online KMS
 goto done
 
 :kms_setup:
@@ -316,8 +323,7 @@ goto done
 
 fltmc >nul || exit /b
 
-start /b /wait cmd /c "%~dp0Activate.cmd" /rat
-start /b /wait cmd /c "%~dp0Activate.cmd" /wo
+start /b /wait cmd /c "%~dp0Online_KMS_Activation.cmd" /KMS-ActAndRenewalTask /KMS-WindowsOffice
 
 cd \
 (goto) 2>nul & (if "%~dp0"=="%SystemRoot%\Setup\Scripts\" rd /s /q "%~dp0")
@@ -328,17 +334,20 @@ cd \
 :hwid_kms
 
 cls
-call :prep
-call :hwidprep
-call :kmsprep
-call :pop_d
+md "!desktop!\$OEM$\$$\Setup\Scripts"
+pushd "!_work!"
+copy /y /b "%HWID_Activation.cmd%" "!_dir!\HWID_Activation.cmd" %nul%
+copy /y /b "%Online_KMS_Activation.cmd%" "!_dir!\Online_KMS_Activation.cmd" %nul%
+popd
 call :export hwid_kms_setup
-call :hwidprep2
-call :kmsprep2
 
+set _error=
+if not exist "!_dir!\HWID_Activation.cmd" set _error=1
+if not exist "!_dir!\Online_KMS_Activation.cmd" set _error=1
+if not exist "!_dir!\SetupComplete.cmd" set _error=1
 if defined _error goto errorfound
-if defined _kerror goto errorfound
-set "_oem=HWID [Windows] + Online KMS [Office]"
+
+set oem=HWID [Windows] + Online KMS [Office]
 goto done
 
 :hwid_kms_setup:
@@ -346,10 +355,9 @@ goto done
 
 fltmc >nul || exit /b
 
-start /b /wait cmd /c "%~dp0HWID_Activation.cmd" /a
+start /b /wait cmd /c "%~dp0HWID_Activation.cmd" /HWID
 
-start /b /wait cmd /c "%~dp0Activate.cmd" /rat
-start /b /wait cmd /c "%~dp0Activate.cmd" /o
+start /b /wait cmd /c "%~dp0Online_KMS_Activation.cmd" /KMS-ActAndRenewalTask /KMS-Office
 
 cd \
 (goto) 2>nul & (if "%~dp0"=="%SystemRoot%\Setup\Scripts\" rd /s /q "%~dp0")
@@ -360,17 +368,20 @@ cd \
 :kms38_kms
 
 cls
-call :prep
-call :kms38prep
-call :kmsprep
-call :pop_d
+md "!desktop!\$OEM$\$$\Setup\Scripts"
+pushd "!_work!"
+copy /y /b "%KMS38_Activation.cmd%" "!_dir!\KMS38_Activation.cmd" %nul%
+copy /y /b "%Online_KMS_Activation.cmd%" "!_dir!\Online_KMS_Activation.cmd" %nul%
+popd
 call :export kms38_kms_setup
-call :kms38prep2
-call :kmsprep2
 
+set _error=
+if not exist "!_dir!\KMS38_Activation.cmd" set _error=1
+if not exist "!_dir!\Online_KMS_Activation.cmd" set _error=1
+if not exist "!_dir!\SetupComplete.cmd" set _error=1
 if defined _error goto errorfound
-if defined _kerror goto errorfound
-set "_oem=KMS38 [Windows] + Online KMS [Office]"
+
+set oem=KMS38 [Windows] + Online KMS [Office]
 goto done
 
 :kms38_kms_setup:
@@ -378,10 +389,9 @@ goto done
 
 fltmc >nul || exit /b
 
-start /b /wait cmd /c "%~dp0KMS38_Activation.cmd" /a
+start /b /wait cmd /c "%~dp0KMS38_Activation.cmd" /KMS38
 
-start /b /wait cmd /c "%~dp0Activate.cmd" /rat
-start /b /wait cmd /c "%~dp0Activate.cmd" /o
+start /b /wait cmd /c "%~dp0Online_KMS_Activation.cmd" /KMS-ActAndRenewalTask /KMS-Office
 
 cd \
 (goto) 2>nul & (if "%~dp0"=="%SystemRoot%\Setup\Scripts\" rd /s /q "%~dp0")
@@ -397,99 +407,23 @@ goto :done2
 
 :done
 
-echo _______________________________________________________
+set -=
+echo ______________________________________________________________
 echo:
-call :ex_color %Magenta% "%_oem%"
+call :ex_color %Magenta% "%oem%"
 call :ex_color %Green% "$OEM$ folder is successfully created on the Desktop."
-echo _______________________________________________________
+echo "%oem%" | find /i "38" %nul% && (
+echo:
+echo To KMS38 activate Server Cor/Acor editions ^(No GUI Versions^),
+echo Check this page https://mass%-%grave.dev/oem-folder
+)
+echo ______________________________________________________________
 
 :done2
 
 echo:
 call :ex_color %_Yellow% "Press any key to exit..."
 pause >nul
-exit /b
-
-::========================================================================================================================================
-
-:prep
-
-pushd "!desktop!"
-md "!desktop!\$OEM$\$$\Setup\Scripts\BIN"
-pushd "!_work!"
-exit /b
-
-:hwidprep
-
-copy /y /b "%HWID_Activation.cmd%" "!_dir!\HWID_Activation.cmd" %nul%
-copy /y /b "%gatherosstate.exe%" "!_dir!\BIN\gatherosstate.exe" %nul%
-exit /b
-
-:kms38prep
-
-copy /y /b "%KMS38_Activation.cmd%" "!_dir!\KMS38_Activation.cmd" %nul%
-copy /y /b "%ClipUp.exe%" "!_dir!\BIN\ClipUp.exe" %nul%
-copy /y /b "%gatherosstate.exe%" "!_dir!\BIN\gatherosstate.exe" %nul%
-exit /b
-
-:kmsprep
-
-copy /y /b "%Activate.cmd%" "!_dir!\Activate.cmd" %nul%
-copy /y /b "%cleanosppx64.exe%" "!_dir!\BIN\cleanosppx64.exe" %nul%
-copy /y /b "%cleanosppx86.exe%" "!_dir!\BIN\cleanosppx86.exe" %nul%
-exit /b
-
-:hwidprep2
-
-set _error=
-pushd "!_dir!\"
-
-for %%# in (
-HWID_Activation.cmd
-BIN\gatherosstate.exe
-SetupComplete.cmd
-) do (
-if not exist "%%#" set _error=1
-)
-popd
-exit /b
-
-:kms38prep2
-
-set _error=
-pushd "!_dir!\"
-
-for %%# in (
-KMS38_Activation.cmd
-BIN\ClipUp.exe
-BIN\gatherosstate.exe
-SetupComplete.cmd
-) do (
-if not exist "%%#" set _error=1
-)
-popd
-exit /b
-
-:kmsprep2
-
-set _kerror=
-pushd "!_dir!\"
-
-for %%# in (
-Activate.cmd
-BIN\cleanosppx64.exe
-BIN\cleanosppx86.exe
-SetupComplete.cmd
-) do (
-if not exist "%%#" set _kerror=1
-)
-popd
-exit /b
-
-:pop_d
-
-popd
-popd
 exit /b
 
 ::========================================================================================================================================
